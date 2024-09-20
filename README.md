@@ -14,7 +14,6 @@ WiFi Finder는 사용자가 가까운 WiFi 위치를 검색하고, 해당 위치
 - Flask
 - HTML/CSS/JavaScript
 - Naver Maps API
-- PostgreSQL (또는 다른 데이터베이스)
 
 ## 사용 api
 
