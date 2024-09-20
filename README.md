@@ -14,11 +14,10 @@ WiFi Finder는 사용자가 가까운 WiFi 위치를 검색하고, 해당 위치
 - Flask
 - HTML/CSS/JavaScript
 - Naver Maps API
-- PostgreSQL (또는 다른 데이터베이스)
 
 ## 사용 api
 
-- 공공데이터 포털(https://www.data.go.kr/)에서 제공하는 csv, xlsx
+- 공공데이터 포털(https://www.data.go.kr/) 에서 제공하는 csv, xlsx
 (공공와이파이.csv, 공공와이파이_20240830_090108.xlsx) 
 
 ## index.html의 위치
