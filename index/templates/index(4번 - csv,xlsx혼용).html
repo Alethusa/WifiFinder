@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가까운 공공 와이파이 찾기</title>
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+    </style>
+    <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=0sttoq5gaf"></script>
+</head>
+<body>
+    <h1>가까운 공공 와이파이 찾기</h1>
+    <button onclick="getLocation()">위치 가져오기</button>
+
+    <p id="status">위치를 가져오는 중입니다...</p>
+    <p id="wifi-info"></p>
+
+    <div id="map"></div>
+
+    <script>
+        let map;
+        let marker;
+
+        // 지도 초기화 함수
+        function initMap(lat, lng) {
+            map = new naver.maps.Map('map', {
+                center: new naver.maps.LatLng(lat, lng),
+                zoom: 15
+            });
+
+            marker = new naver.maps.Marker({
+                position: new naver.maps.LatLng(lat, lng),
+                map: map
+            });
+
+            polyline = new naver.maps.Polyline({
+                map: map,
+                path: [],  // 초기에는 빈 경로로 설정
+                strokeColor: '#5347AA',
+                strokeOpacity: 0.8,
+                strokeWeight: 5
+            });
+        }
+
+        // 사용자의 현재 위치 가져오기
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(showPosition, showError);
+            } else {
+                document.getElementById("status").innerHTML = "Geolocation은 이 브라우저에서 지원되지 않습니다.";
+            }
+        }
+
+        // 위치 가져왔을 때 호출되는 함수
+        function showPosition(position) {
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
+
+            document.getElementById("status").innerHTML = `위도: ${latitude}, 경도: ${longitude}`;
+
+            // 지도 초기화 및 사용자 위치 마커 설정
+            initMap(latitude, longitude);
+
+            // 서버로 위치 정보 전송하여 가까운 와이파이 정보 요청
+            fetch('/location', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    latitude: latitude,
+                    longitude: longitude
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.length > 0) {
+                    // 와이파이 목록 생성
+                    const wifiInfo = data.map((wifi, index) =>
+                        `<a href="#" onclick="showMap(${wifi.latitude}, ${wifi.longitude}); return false;">이름: ${wifi.name}, 주소: ${wifi.address}, 거리: ${wifi.distance.toFixed(2)}m</a>`
+                    ).join('<br>');
+                    document.getElementById("wifi-info").innerHTML = wifiInfo;
+                } else {
+                    document.getElementById("wifi-info").innerHTML = '가까운 공공 와이파이 정보를 찾을 수 없습니다.';
+                }
+            })
+            .catch((error) => {
+                console.error('오류 발생:', error);
+                document.getElementById("wifi-info").innerHTML = '와이파이 정보를 불러오는 중 오류가 발생했습니다.';
+            });
+        }
+
+        // 선택한 와이파이 위치로 지도 이동 및 마커 설정
+        function showMap(lat, lng) {
+            const newLocation = new naver.maps.LatLng(lat, lng);
+
+            // 지도 중심을 새로운 위치로 이동
+            map.setCenter(newLocation);
+            // 마커 위치 업데이트
+            marker.setPosition(newLocation);
+        }
+
+        // 위치 가져오기 실패 시 호출되는 함수
+        function showError(error) {
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    document.getElementById("status").innerHTML = "사용자가 Geolocation 요청을 거부했습니다.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    document.getElementById("status").innerHTML = "위치 정보를 사용할 수 없습니다.";
+                    break;
+                case error.TIMEOUT:
+                    document.getElementById("status").innerHTML = "위치 요청이 시간을 초과했습니다.";
+                    break;
+                case error.UNKNOWN_ERROR:
+                    document.getElementById("status").innerHTML = "알 수 없는 오류가 발생했습니다.";
+                    break;
+            }
+        }
+    </script>
+</body>
+</html>

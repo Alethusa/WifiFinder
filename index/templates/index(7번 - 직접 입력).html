@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가까운 공공 와이파이 찾기</title>
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+    </style>
+    <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=0sttoq5gaf"></script>
+</head>
+<body>
+    <h1>가까운 공공 와이파이 찾기</h1>
+    
+    <p id="status">지도를 클릭하여 위치를 선택하거나 도로명주소를 입력하세요.</p>
+    
+    <input type="text" id="address-input" placeholder="도로명주소 입력">
+    <button onclick="searchAddress()">주소 검색</button>
+
+    <p id="wifi-info"></p>
+
+    <div id="map"></div>
+
+    <script>
+        let map;
+        let userMarker;
+        let destinationMarker;
+        let polyline;
+        let userLocation;
+
+        // 지도 초기화 함수
+        function initMap() {
+            map = new naver.maps.Map('map', {
+                center: new naver.maps.LatLng(37.5665, 126.978), // 기본 위치 (서울)
+                zoom: 15
+            });
+
+            naver.maps.Event.addListener(map, 'click', function(e) {
+                userLocation = e.latlng;
+                placeUserMarker(userLocation);
+                getWifiInfo(userLocation);
+            });
+
+            polyline = new naver.maps.Polyline({
+                map: map,
+                path: [],
+                strokeColor: '#5347AA',
+                strokeOpacity: 0.8,
+                strokeWeight: 5
+            });
+        }
+
+        // 사용자 위치 마커 설정
+        function placeUserMarker(location) {
+            if (userMarker) {
+                userMarker.setMap(null); // 이전 마커 제거
+            }
+
+            userMarker = new naver.maps.Marker({
+                position: location,
+                map: map,
+                icon: {
+                    content: '<div style="color: blue;">⬤</div>',
+                    size: new naver.maps.Size(20, 20)
+                }
+            });
+
+            document.getElementById("status").innerHTML = `위도: ${location.lat()}, 경도: ${location.lng()}`;
+        }
+
+        // 가까운 공공 와이파이 정보 요청
+        function getWifiInfo(location) {
+            fetch('/location', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    latitude: location.lat(),
+                    longitude: location.lng()
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.length > 0) {
+                    const wifiInfo = data.map((wifi, index) =>
+                        `<a href="#" onclick="showMap(${wifi.latitude}, ${wifi.longitude}, '${wifi.name}'); return false;">이름: ${wifi.name}, 주소: ${wifi.address}, 거리: ${wifi.distance.toFixed(2)}m</a>`
+                    ).join('<br>');
+                    document.getElementById("wifi-info").innerHTML = wifiInfo;
+                } else {
+                    document.getElementById("wifi-info").innerHTML = '가까운 공공 와이파이 정보를 찾을 수 없습니다.';
+                }
+            })
+            .catch((error) => {
+                console.error('오류 발생:', error);
+                document.getElementById("wifi-info").innerHTML = '와이파이 정보를 불러오는 중 오류가 발생했습니다.';
+            });
+        }
+
+        // 도로명주소 검색 함수
+        function searchAddress() {
+            const address = document.getElementById("address-input").value;
+            if (!address) {
+                alert("도로명주소를 입력해주세요.");
+                return;
+            }
+
+            naver.maps.Service.geocode({ query: address }, function(status, response) {
+                console.log(status, response);  // 추가된 로그
+                if (status === naver.maps.Service.Status.ERROR) {
+                    alert("주소 검색에 실패했습니다.");
+                    return;
+                }
+
+                const results = response.v2.places; // 여러 결과가 있을 수 있음
+                if (results.length > 0) {
+                    const result = results[0];
+                    userLocation = new naver.maps.LatLng(result.y, result.x);
+                    placeUserMarker(userLocation);
+                    getWifiInfo(userLocation);
+                    map.setCenter(userLocation);
+                } else {
+                    alert("검색된 주소가 없습니다.");
+                }
+            });
+        }
+
+        // 선택한 와이파이 위치로 경로 표시
+        function showMap(lat, lng, name) {
+            const destinationLocation = new naver.maps.LatLng(lat, lng);
+
+            if (destinationMarker) {
+                destinationMarker.setMap(null); // 이전 마커 제거
+            }
+
+            // 목적지 마커 설정
+            destinationMarker = new naver.maps.Marker({
+                position: destinationLocation,
+                map: map,
+                icon: {
+                    content: '<div style="color: red;">⬤</div>',
+                    size: new naver.maps.Size(20, 20)
+                }
+            });
+
+            // 인포윈도우 추가
+            const infoWindow = new naver.maps.InfoWindow({
+                content: `<div style="padding:10px;">${name}</div>`
+            });
+            infoWindow.open(map, destinationMarker);
+
+            // 도보 경로 표시
+            displayWalkingRoute(userLocation, destinationLocation);
+        }
+
+        // 도보 경로 표시 함수
+        function displayWalkingRoute(start, end) {
+            const startLatLng = new naver.maps.LatLng(start.lat(), start.lng());
+            const endLatLng = new naver.maps.LatLng(end.lat(), end.lng());
+
+            naver.maps.Service.calculateRoute({
+                start: startLatLng,
+                end: endLatLng,
+                option: { pathType: 2 } // 도보 경로
+            }, function(status, response) {
+                if (status === naver.maps.Service.Status.ERROR) {
+                    alert('경로 검색에 실패했습니다.');
+                    return;
+                }
+
+                // 경로 설정
+                const route = response.route;
+                const path = route.path.map(coord => new naver.maps.LatLng(coord[0], coord[1]));
+
+                polyline.setPath(path);
+                map.setCenter(start);
+                map.setZoom(15);
+            });
+        }
+
+        // 지도 초기화
+        initMap();
+    </script>
+</body>
+</html>

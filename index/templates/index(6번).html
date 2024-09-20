@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가까운 공공 와이파이 찾기</title>
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+    </style>
+    <script type="text/javascript" src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=0sttoq5gaf"></script>
+</head>
+<body>
+    <h1>가까운 공공 와이파이 찾기</h1>
+    <button onclick="getLocation()">위치 가져오기</button>
+
+    <p id="status">위치를 가져오는 중입니다...</p>
+    <p id="wifi-info"></p>
+
+    <div id="map"></div>
+
+    <script>
+        let map;
+        let userMarker;
+        let destinationMarker;
+        let polyline;
+        let userLocation;
+
+        // 지도 초기화 함수
+        function initMap(lat, lng) {
+            userLocation = new naver.maps.LatLng(lat, lng);
+
+            map = new naver.maps.Map('map', {
+                center: userLocation,
+                zoom: 15
+            });
+
+            userMarker = new naver.maps.Marker({
+                position: userLocation,
+                map: map
+            });
+
+            polyline = new naver.maps.Polyline({
+                map: map,
+                path: [],
+                strokeColor: '#5347AA',
+                strokeOpacity: 0.8,
+                strokeWeight: 5
+            });
+        }
+
+        // 사용자의 현재 위치 가져오기
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(showPosition, showError, {
+                    enableHighAccuracy: true,  // 위치 정확도 옵션 추가
+                    timeout: 5000,  // 타임아웃 설정
+                    maximumAge: 0    // 캐시된 위치 사용하지 않음
+                });
+            } else {
+                document.getElementById("status").innerHTML = "Geolocation은 이 브라우저에서 지원되지 않습니다.";
+            }
+        }
+
+        // 위치 가져왔을 때 호출되는 함수
+        function showPosition(position) {
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
+
+            console.log(`Received position: Latitude ${latitude}, Longitude ${longitude}`);
+            document.getElementById("status").innerHTML = `위도: ${latitude}, 경도: ${longitude}`;
+
+            // 지도 초기화 및 사용자 위치 마커 설정
+            initMap(latitude, longitude);
+
+            // 서버로 위치 정보 전송하여 가까운 와이파이 정보 요청
+            fetch('/location', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    latitude: latitude,
+                    longitude: longitude
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.length > 0) {
+                    const wifiInfo = data.map((wifi, index) =>
+                        `<a href="#" onclick="showMap(${wifi.latitude}, ${wifi.longitude}); return false;">이름: ${wifi.name}, 주소: ${wifi.address}, 거리: ${wifi.distance.toFixed(2)}m</a>`
+                    ).join('<br>');
+                    document.getElementById("wifi-info").innerHTML = wifiInfo;
+                } else {
+                    document.getElementById("wifi-info").innerHTML = '가까운 공공 와이파이 정보를 찾을 수 없습니다.';
+                }
+            })
+            .catch((error) => {
+                console.error('오류 발생:', error);
+                document.getElementById("wifi-info").innerHTML = '와이파이 정보를 불러오는 중 오류가 발생했습니다.';
+            });
+        }
+
+        // 선택한 와이파이 위치로 경로 표시
+        function showMap(lat, lng) {
+            const destinationLocation = new naver.maps.LatLng(lat, lng);
+
+            if (destinationMarker) {
+                destinationMarker.setMap(null); // 이전 마커 제거
+            }
+
+            // 목적지 마커 설정
+            destinationMarker = new naver.maps.Marker({
+                position: destinationLocation,
+                map: map
+            });
+
+            // 경로 설정
+            polyline.setPath([userLocation, destinationLocation]);
+
+            // 지도 중심을 사용자의 위치로 유지
+            map.setCenter(userLocation);
+        }
+
+        // 위치 가져오기 실패 시 호출되는 함수
+        function showError(error) {
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    document.getElementById("status").innerHTML = "사용자가 Geolocation 요청을 거부했습니다.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    document.getElementById("status").innerHTML = "위치 정보를 사용할 수 없습니다.";
+                    break;
+                case error.TIMEOUT:
+                    document.getElementById("status").innerHTML = "위치 요청이 시간을 초과했습니다.";
+                    break;
+                case error.UNKNOWN_ERROR:
+                    document.getElementById("status").innerHTML = "알 수 없는 오류가 발생했습니다.";
+                    break;
+            }
+        }
+    </script>
+</body>
+</html>

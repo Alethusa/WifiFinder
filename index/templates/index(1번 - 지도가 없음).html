@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>가까운 공공 와이파이 찾기</title>
+</head>
+<body>
+    <h1>가까운 공공 와이파이 찾기</h1>
+    <button onclick="getLocation()">위치 가져오기</button>
+
+    <p id="status">위치를 가져오는 중입니다...</p>
+    <p id="wifi-info"></p>
+
+    <script>
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(showPosition, showError);
+            } else {
+                document.getElementById("status").innerHTML = "Geolocation은 이 브라우저에서 지원되지 않습니다.";
+            }
+        }
+
+        function showPosition(position) {
+            const latitude = position.coords.latitude;
+            const longitude = position.coords.longitude;
+
+            document.getElementById("status").innerHTML = `위도: ${latitude}, 경도: ${longitude}`;
+
+            // 서버로 위도와 경도를 전송
+            fetch('/location', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    latitude: latitude,
+                    longitude: longitude
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.length > 0) {
+                    const wifiInfo = data.map(wifi => `이름: ${wifi.name}, 주소: ${wifi.address}, 거리: ${wifi.distance.toFixed(2)}m`).join('<br>');
+                    document.getElementById("wifi-info").innerHTML = wifiInfo;
+                } else {
+                    document.getElementById("wifi-info").innerHTML = '가까운 공공 와이파이 정보를 찾을 수 없습니다.';
+                }
+            })
+            .catch((error) => {
+                console.error('오류 발생:', error);
+                document.getElementById("wifi-info").innerHTML = '와이파이 정보를 불러오는 중 오류가 발생했습니다.';
+            });
+        }
+
+        function showError(error) {
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    document.getElementById("status").innerHTML = "사용자가 Geolocation 요청을 거부했습니다.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    document.getElementById("status").innerHTML = "위치 정보를 사용할 수 없습니다.";
+                    break;
+                case error.TIMEOUT:
+                    document.getElementById("status").innerHTML = "위치 요청이 시간을 초과했습니다.";
+                    break;
+                case error.UNKNOWN_ERROR:
+                    document.getElementById("status").innerHTML = "알 수 없는 오류가 발생했습니다.";
+                    break;
+            }
+        }
+    </script>
+</body>
+</html>
